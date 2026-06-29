@@ -1391,6 +1391,13 @@ button{font-family:inherit;cursor:pointer}
 /* Map tooltip */
 #map-tip{position:absolute;background:rgba(15,23,42,.88);color:white;padding:6px 10px;border-radius:6px;font-size:12px;pointer-events:none;z-index:600;display:none;direction:rtl;max-width:220px;line-height:1.5;white-space:pre-wrap}
 
+/* Map legend overlay */
+#map-legend{position:absolute;bottom:28px;left:10px;z-index:500;background:rgba(255,255,255,.93);border-radius:8px;padding:8px 12px;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.18);direction:rtl;pointer-events:none;min-width:130px}
+#map-legend .leg-row{display:flex;align-items:center;gap:6px;padding:2px 0;line-height:1.3}
+#map-legend .leg-sw{width:12px;height:12px;border-radius:3px;flex-shrink:0}
+#map-legend .leg-title{font-weight:600;margin-bottom:4px;font-size:11px;color:#475569}
+#taz-hint{display:none;align-items:center;justify-content:center;height:100%;color:#94a3b8;font-size:13px;text-align:center;padding:20px;direction:rtl}
+
 /* Entity legend */
 .ent-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px 6px}
 .ent-row{display:flex;align-items:center;gap:5px;padding:2px 0;min-width:0}
@@ -1432,6 +1439,7 @@ button{font-family:inherit;cursor:pointer}
   <div class="map-wrap">
     <div id="map"></div>
     <div id="map-tip"></div>
+    <div id="map-legend"></div>
   </div>
 
   <div class="side-panel">
@@ -1509,7 +1517,8 @@ button{font-family:inherit;cursor:pointer}
         <span class="p-card-title">סיכום</span>
         <span id="tbl-cap" style="font-size:11px;color:#94a3b8"></span>
       </div>
-      <div class="sum-wrap" style="flex:1">
+      <div id="taz-hint">לחץ על אזור תנועה במפה לצפייה בנתוניו</div>
+      <div id="sum-wrap" class="sum-wrap" style="flex:1">
         <table class="sum-table">
           <thead>
             <tr>
@@ -1687,6 +1696,32 @@ function updateMap() {
   updateTable();
 }
 
+// ── MAP LEGEND OVERLAY ────────────────────────────────────────────────────
+function updateMapLegend() {
+  const el = document.getElementById('map-legend');
+  if (!el) return;
+  if (S.mode === 'sector') {
+    el.style.display = 'block';
+    el.innerHTML = '<div class="leg-title">מגזר</div>' +
+      Object.entries(SECTOR).map(([k,v]) => {
+        const dim = !S.filter.has(k);
+        return '<div class="leg-row" style="opacity:' + (dim?0.3:1) + '">' +
+               '<span class="leg-sw" style="background:' + v.color + '"></span>' +
+               v.label + '</div>';
+      }).join('');
+  } else if (S.mode === 'choro') {
+    const metLbl = S.met==='p'?'אוכלוסייה':S.met==='a'?'יח"ד':'מועסקים';
+    const {min,max} = RANGE;
+    el.style.display = 'block';
+    el.innerHTML = '<div class="leg-title">' + metLbl + '</div>' +
+      '<div class="choro-bar" style="height:12px;margin:4px 0"></div>' +
+      '<div style="display:flex;justify-content:space-between;font-size:10px;color:#64748b">' +
+      '<span>' + fmt(max) + '</span><span>' + fmt(min) + '</span></div>';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
 // ── LEGEND / FILTER ───────────────────────────────────────────────────────
 function updateLegend() {
   const secWrap = document.getElementById('sec-filter-wrap');
@@ -1727,6 +1762,7 @@ function updateLegend() {
     document.getElementById('ch-mid').textContent = fmt(Math.round((min+max)/2));
     document.getElementById('ch-max').textContent = fmt(max);
   }
+  updateMapLegend();
 }
 
 function toggleSec(k) {
@@ -1772,6 +1808,10 @@ function buildRows() {
 }
 
 function updateTable() {
+  const isTaz = S.lv === 'taz';
+  document.getElementById('taz-hint').style.display = isTaz ? 'flex' : 'none';
+  document.getElementById('sum-wrap').style.display = isTaz ? 'none' : '';
+  if (isTaz) { document.getElementById('tbl-cap').textContent = ''; return; }
   const {display: rows, total: allRows, noData} = buildRows();
   const tot = allRows.reduce((acc,r)=>({a:acc.a+r.a,p:acc.p+r.p,e:acc.e+r.e}),{a:0,p:0,e:0});
   const lvLbl = {taz:'אזורי תנועה',neigh:'שכונות',muni:'רשויות מקומיות',dist:'מחוזות'};
