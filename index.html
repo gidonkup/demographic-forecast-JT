@@ -1536,7 +1536,10 @@ button{font-family:inherit;cursor:pointer}
 
     <!-- סינון -->
     <div class="p-card">
-      <div class="p-card-hdr"><span class="p-card-title">סינון</span></div>
+      <div class="p-card-hdr">
+        <span class="p-card-title">סינון</span>
+        <button class="pill" onclick="clearAllFilters()" style="font-size:11px;padding:3px 10px;color:#dc2626;border-color:#fca5a5">נקה הכל</button>
+      </div>
       <div class="p-card-body" style="display:flex;flex-direction:column;gap:8px">
         <div style="display:flex;align-items:center;justify-content:space-between">
           <span class="flt-lbl" style="margin:0">מגזר</span>
@@ -1549,8 +1552,8 @@ button{font-family:inherit;cursor:pointer}
             <option value="">הכל</option>
           </select>
         </div>
-        <div id="sf-neigh-wrap">
-          <span class="flt-lbl">שכונה (ירושלים)</span>
+        <div id="sf-neigh-wrap" style="display:none">
+          <span class="flt-lbl">שכונה</span>
           <select id="sf-neigh" onchange="setSFNeigh(this.value)" class="sf-select">
             <option value="">הכל</option>
           </select>
@@ -1681,8 +1684,17 @@ function getVal(props, met) {
   return AGG[S.lv]?.[props.nm]?.[S.sc]?.[S.yr]?.[m] || 0;
 }
 
+function isVisibleFeature(f) {
+  const p = f.properties;
+  if (S.lv === 'taz') return isVisibleTaz(p);
+  if (!S.filter.has(p.sec || '')) return false;
+  if (S.sfMuni  && S.lv === 'muni'  && p.nm !== S.sfMuni)  return false;
+  if (S.sfNeigh && S.lv === 'neigh' && p.nm !== S.sfNeigh) return false;
+  return true;
+}
+
 function computeRange() {
-  const vals = GJ[S.lv].features.map(f=>getVal(f.properties)).filter(v=>v>0);
+  const vals = GJ[S.lv].features.filter(isVisibleFeature).map(f=>getVal(f.properties)).filter(v=>v>0);
   return vals.length ? {min:Math.min(...vals), max:Math.max(...vals)} : {min:0,max:1};
 }
 
@@ -1843,11 +1855,23 @@ function setSFMuni(v) {
   S.sfMuni = v; S.sfNeigh = '';
   const ns = document.getElementById('sf-neigh');
   if (ns) ns.value = '';
+  // Show neighborhood filter only when Jerusalem is selected
+  const hasNeigh = v && GJ.taz.features.some(f=>f.properties.muni===v && f.properties.schn);
+  const nw = document.getElementById('sf-neigh-wrap');
+  if (nw) nw.style.display = hasNeigh ? '' : 'none';
   applyFilters();
 }
 function setSFNeigh(v) { S.sfNeigh = v; applyFilters(); }
-function clearSF() { S.sfMuni=''; S.sfNeigh=''; applyFilters(); }
+function clearAllFilters() {
+  Object.keys(SECTOR).forEach(k=>S.filter.add(k));
+  S.sfMuni=''; S.sfNeigh='';
+  const ms=document.getElementById('sf-muni'); if(ms) ms.value='';
+  const ns=document.getElementById('sf-neigh'); if(ns) ns.value='';
+  const nw=document.getElementById('sf-neigh-wrap'); if(nw) nw.style.display='none';
+  applyFilters();
+}
 function applyFilters() {
+  if (S.mode==='choro') RANGE = computeRange();
   updateLegend();
   if (geoLayer) geoLayer.setStyle(styleF);
   updateTable();
@@ -1855,17 +1879,13 @@ function applyFilters() {
 
 function toggleSec(k) {
   if (S.filter.has(k)) S.filter.delete(k); else S.filter.add(k);
-  updateLegend();
-  if (geoLayer) geoLayer.setStyle(styleF);
-  updateTable();
+  applyFilters();
 }
 
 function selectAllSectors() {
   const allOn = Object.keys(SECTOR).every(k=>S.filter.has(k));
   if (allOn) S.filter.clear(); else Object.keys(SECTOR).forEach(k=>S.filter.add(k));
-  updateLegend();
-  if (geoLayer) geoLayer.setStyle(styleF);
-  updateTable();
+  applyFilters();
 }
 
 // ── TABLE ─────────────────────────────────────────────────────────────────
