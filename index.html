@@ -1507,33 +1507,43 @@ button{font-family:inherit;cursor:pointer}
       <div class="p-card-hdr"><span class="p-card-title">הצגה על המפה</span></div>
       <div class="p-card-body" style="display:flex;flex-direction:column;gap:8px">
         <div class="seg-row">
-          <button class="seg-btn active" id="md-base"   onclick="setMode('base')">ניטרלי</button>
+          <button class="seg-btn active" id="md-choro"  onclick="setMode('choro')">כמותי</button>
           <button class="seg-btn"        id="md-sector" onclick="setMode('sector')">מגזר</button>
           <button class="seg-btn"        id="md-entity" onclick="setMode('entity')" style="display:none">ישות</button>
-          <button class="seg-btn"        id="md-choro"  onclick="setMode('choro')">כמותי</button>
         </div>
         <!-- metric (choropleth mode) -->
-        <div id="metric-row" class="pill-row" style="display:none">
+        <div id="metric-row" class="pill-row">
           <button class="pill active" id="mt-p" onclick="setMetric('p')">אוכלוסייה</button>
           <button class="pill"        id="mt-a" onclick="setMetric('a')">יחידות דיור</button>
           <button class="pill"        id="mt-e" onclick="setMetric('e')">מועסקים</button>
         </div>
         <!-- choropleth legend -->
-        <div id="choro-leg" style="display:none">
+        <div id="choro-leg">
           <div class="choro-bar"></div>
           <div class="choro-scale">
             <span id="ch-min">0</span><span id="ch-mid">—</span><span id="ch-max">0</span>
           </div>
         </div>
-        <!-- sector filter + select-all -->
-        <div id="sec-filter-wrap">
-          <div id="sec-all-wrap" style="display:flex;justify-content:flex-end;margin-bottom:4px">
-            <button class="pill" id="sec-all-btn" onclick="selectAllSectors()" style="font-size:11px;padding:3px 10px">בחר הכל</button>
-          </div>
-          <div id="sector-filter" class="pill-row" style="gap:4px"></div>
-        </div>
         <!-- entity legend -->
         <div id="entity-leg" style="display:none;max-height:170px;overflow-y:auto;direction:rtl"></div>
+      </div>
+    </div>
+
+    <!-- סינון -->
+    <div class="p-card">
+      <div class="p-card-hdr">
+        <span class="p-card-title">סינון</span>
+        <button class="pill" id="sec-all-btn" onclick="selectAllSectors()" style="font-size:11px;padding:3px 10px">בחר הכל</button>
+      </div>
+      <div class="p-card-body" style="display:flex;flex-direction:column;gap:6px">
+        <!-- sector chips - always visible, global filter -->
+        <div id="sector-filter" class="pill-row" style="gap:4px"></div>
+        <!-- active spatial filter badge -->
+        <div id="sf-badge" style="display:none;align-items:center;gap:6px;direction:rtl;margin-top:2px">
+          <span style="font-size:11px;color:#64748b">מסנן מרחבי:</span>
+          <span id="sf-label" style="font-size:12px;font-weight:600;color:#1B3CC0"></span>
+          <button onclick="clearSF()" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:14px;padding:0 2px;line-height:1" title="נקה סינון">&#x2715;</button>
+        </div>
       </div>
     </div>
 
@@ -1637,8 +1647,9 @@ function toggleAllEntities() {
 
 // ── STATE ─────────────────────────────────────────────────────────────────
 const S = {
-  sc: 'jtmt', yr: 2025, lv: 'taz', mode: 'base', met: 'p',
+  sc: 'jtmt', yr: 2025, lv: 'taz', mode: 'choro', met: 'p',
   filter: new Set(Object.keys(SECTOR)),
+  sf: null,
   sortK: 'p', sortDir: -1,
 };
 let RANGE = {min:0, max:1};
@@ -1675,17 +1686,36 @@ function choroClr(v) {
 
 // ── STYLE ─────────────────────────────────────────────────────────────────
 function styleF(feature) {
-  const sec = feature.properties.sec;
-  const nm  = feature.properties.nm || '';
+  const p   = feature.properties;
+  const sec = p.sec || '';
+  const nm  = p.nm  || '';
   const isTaz = S.lv === 'taz';
   const border = isTaz ? {color:'transparent', weight:0} : {color:'#888', weight:0.7};
-  if (S.mode === 'base') return {fillColor:'#94a3b8', fillOpacity:.18, ...border, opacity:.7};
-  if (S.mode === 'sector' && !S.filter.has(sec)) return {fillColor:'#d1d5db', fillOpacity:.12, color:'transparent', weight:0};
-  if (S.mode === 'entity' && hiddenEntities.has(nm))  return {fillColor:'#d1d5db', fillOpacity:.12, color:'transparent', weight:0};
+  const hidden = {fillColor:'#e2e8f0', fillOpacity:.10, color:'transparent', weight:0};
+
+  // ── Spatial filter ────────────────────────────────────────────────────────
+  if (S.sf) {
+    if (isTaz) {
+      if (S.sf.type === 'muni'  && p.muni !== S.sf.nm) return hidden;
+      if (S.sf.type === 'neigh' && p.schn !== S.sf.nm) return hidden;
+    } else {
+      // dissolved level: hide non-matching areas when filter type matches level
+      if (S.sf.type === 'muni'  && S.lv === 'muni'  && nm !== S.sf.nm) return hidden;
+      if (S.sf.type === 'neigh' && S.lv === 'neigh'  && nm !== S.sf.nm) return hidden;
+    }
+  }
+
+  // ── Sector filter (global) ─────────────────────────────────────────────────
+  if (!S.filter.has(sec)) return hidden;
+
+  // ── Entity visibility ──────────────────────────────────────────────────────
+  if (S.mode === 'entity' && hiddenEntities.has(nm)) return hidden;
+
+  // ── Color ──────────────────────────────────────────────────────────────────
   let fill;
   if (S.mode === 'sector') fill = secClr(sec);
   else if (S.mode === 'entity') fill = entityColors[nm] || DEFAULT_CLR;
-  else fill = choroClr(getVal(feature.properties));
+  else fill = choroClr(getVal(p));
   return {fillColor:fill, fillOpacity:.84, ...border, opacity:.8};
 }
 
@@ -1728,7 +1758,6 @@ function updateMap() {
 function updateMapLegend() {
   const el = document.getElementById('map-legend');
   if (!el) return;
-  if (S.mode === 'base') { el.style.display = 'none'; return; }
   if (S.mode === 'sector') {
     el.style.display = 'block';
     el.innerHTML = '<div class="leg-title">מגזר</div>' +
@@ -1753,27 +1782,34 @@ function updateMapLegend() {
 
 // ── LEGEND / FILTER ───────────────────────────────────────────────────────
 function updateLegend() {
-  const secWrap = document.getElementById('sec-filter-wrap');
-  const secEl   = document.getElementById('sector-filter');
-  const allBtn  = document.getElementById('sec-all-btn');
-  const entLeg  = document.getElementById('entity-leg');
-  const choLeg  = document.getElementById('choro-leg');
-  const metRow  = document.getElementById('metric-row');
+  const secEl  = document.getElementById('sector-filter');
+  const allBtn = document.getElementById('sec-all-btn');
+  const entLeg = document.getElementById('entity-leg');
+  const choLeg = document.getElementById('choro-leg');
+  const metRow = document.getElementById('metric-row');
 
+  // Sector chips — always visible, global filter
+  const allOn = Object.keys(SECTOR).every(k=>S.filter.has(k));
+  allBtn.textContent = allOn ? 'נקה הכל' : 'בחר הכל';
+  secEl.innerHTML = Object.entries(SECTOR).map(([k,v])=>{
+    const on = S.filter.has(k);
+    return `<button class="sec-chip${on?'':' off'}" style="background:${v.color}" onclick="toggleSec('${k}')">${v.label}</button>`;
+  }).join('');
+
+  // Spatial filter badge
+  const sfBadge = document.getElementById('sf-badge');
+  const sfLabel = document.getElementById('sf-label');
+  if (S.sf) {
+    sfLabel.textContent = S.sf.nm;
+    sfBadge.style.display = 'flex';
+  } else {
+    sfBadge.style.display = 'none';
+  }
+
+  // Mode-specific controls
   metRow.style.display = S.mode==='choro' ? 'flex' : 'none';
   choLeg.style.display  = S.mode==='choro' ? 'block' : 'none';
-  secWrap.style.display = S.mode==='sector' ? 'block' : 'none';
   entLeg.style.display  = S.mode==='entity' ? 'block' : 'none';
-  if (S.mode==='base') { updateMapLegend(); return; }
-
-  if (S.mode==='sector') {
-    const allOn = Object.keys(SECTOR).every(k=>S.filter.has(k));
-    allBtn.textContent = allOn ? 'נקה הכל' : 'בחר הכל';
-    secEl.innerHTML = Object.entries(SECTOR).map(([k,v])=>{
-      const on = S.filter.has(k);
-      return `<button class="sec-chip${on?'':' off'}" style="background:${v.color}" onclick="toggleSec('${k}')">${v.label}</button>`;
-    }).join('');
-  }
 
   if (S.mode==='entity') {
     const entries = Object.entries(entityColors);
@@ -1793,6 +1829,13 @@ function updateLegend() {
     document.getElementById('ch-max').textContent = fmt(max);
   }
   updateMapLegend();
+}
+
+function clearSF() {
+  S.sf = null;
+  updateLegend();
+  if (geoLayer) geoLayer.setStyle(styleF);
+  updateTable();
 }
 
 function toggleSec(k) {
@@ -1941,7 +1984,7 @@ function setLevel(lv) {
   const entBtn = document.getElementById('md-entity');
   if (lv==='taz') {
     entBtn.style.display='none';
-    if (S.mode==='entity') { S.mode='base'; ['base','sector','entity','choro'].forEach(m=>{const e=document.getElementById('md-'+m);if(e)e.classList.toggle('active',m==='base');}); }
+    if (S.mode==='entity') { S.mode='choro'; ['sector','entity','choro'].forEach(m=>{const e=document.getElementById('md-'+m);if(e)e.classList.toggle('active',m==='choro');}); }
   } else {
     entBtn.style.display='';
   }
@@ -1951,7 +1994,7 @@ function setLevel(lv) {
 
 function setMode(md) {
   S.mode=md;
-  ['base','sector','entity','choro'].forEach(m=>{
+  ['sector','entity','choro'].forEach(m=>{
     const el=document.getElementById('md-'+m);
     if(el) el.classList.toggle('active',m===md);
   });
@@ -1998,6 +2041,13 @@ function selectSearch(idx, e) {
   if (!item) return;
   document.getElementById('search-inp').value = item.nm;
   document.getElementById('search-drop').style.display = 'none';
+  // Set spatial filter for muni / neigh selections
+  if (item.type === 'muni' || item.type === 'neigh') {
+    S.sf = {type: item.type, nm: item.nm};
+    updateLegend();
+    if (geoLayer) geoLayer.setStyle(styleF);
+    updateTable();
+  }
   if (S.lv !== item.type) setLevel(item.type);
   zoomToName(item.nm);
 }
