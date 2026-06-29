@@ -1419,6 +1419,11 @@ button{font-family:inherit;cursor:pointer}
 .dp-yr.dp-active{background:#1B3CC0;color:white;font-weight:700;border-color:#1B3CC0}
 .dp-yr-val{font-size:10px;color:#94a3b8}
 .dp-yr.dp-active .dp-yr-val{color:rgba(255,255,255,.8)}
+/* Filter selects */
+.flt-lbl{font-size:11px;color:#64748b;display:block;margin-bottom:3px}
+.sf-select{width:100%;padding:5px 8px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;direction:rtl;font-family:inherit;background:#f8fafc;cursor:pointer;color:#0f172a;appearance:auto}
+.sf-select:focus{outline:none;border-color:#1B3CC0}
+
 /* Search */
 #search-wrap{position:relative;padding:10px 12px 6px;border-bottom:1px solid #e2e8f0}
 #search-box{display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:0 10px;transition:border-color .15s}
@@ -1531,18 +1536,24 @@ button{font-family:inherit;cursor:pointer}
 
     <!-- סינון -->
     <div class="p-card">
-      <div class="p-card-hdr">
-        <span class="p-card-title">סינון</span>
-        <button class="pill" id="sec-all-btn" onclick="selectAllSectors()" style="font-size:11px;padding:3px 10px">בחר הכל</button>
-      </div>
-      <div class="p-card-body" style="display:flex;flex-direction:column;gap:6px">
-        <!-- sector chips - always visible, global filter -->
+      <div class="p-card-hdr"><span class="p-card-title">סינון</span></div>
+      <div class="p-card-body" style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <span class="flt-lbl" style="margin:0">מגזר</span>
+          <button class="pill" id="sec-all-btn" onclick="selectAllSectors()" style="font-size:11px;padding:3px 10px">בחר הכל</button>
+        </div>
         <div id="sector-filter" class="pill-row" style="gap:4px"></div>
-        <!-- active spatial filter badge -->
-        <div id="sf-badge" style="display:none;align-items:center;gap:6px;direction:rtl;margin-top:2px">
-          <span style="font-size:11px;color:#64748b">מסנן מרחבי:</span>
-          <span id="sf-label" style="font-size:12px;font-weight:600;color:#1B3CC0"></span>
-          <button onclick="clearSF()" style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:14px;padding:0 2px;line-height:1" title="נקה סינון">&#x2715;</button>
+        <div>
+          <span class="flt-lbl">רשות מקומית</span>
+          <select id="sf-muni" onchange="setSFMuni(this.value)" class="sf-select">
+            <option value="">הכל</option>
+          </select>
+        </div>
+        <div id="sf-neigh-wrap">
+          <span class="flt-lbl">שכונה (ירושלים)</span>
+          <select id="sf-neigh" onchange="setSFNeigh(this.value)" class="sf-select">
+            <option value="">הכל</option>
+          </select>
         </div>
       </div>
     </div>
@@ -1553,7 +1564,6 @@ button{font-family:inherit;cursor:pointer}
         <span class="p-card-title">סיכום</span>
         <span id="tbl-cap" style="font-size:11px;color:#94a3b8"></span>
       </div>
-      <div id="taz-hint">לחץ על אזור תנועה במפה לצפייה בנתוניו</div>
       <div id="sum-wrap" class="sum-wrap" style="flex:1">
         <table class="sum-table">
           <thead>
@@ -1649,7 +1659,7 @@ function toggleAllEntities() {
 const S = {
   sc: 'jtmt', yr: 2025, lv: 'taz', mode: 'choro', met: 'p',
   filter: new Set(Object.keys(SECTOR)),
-  sf: null,
+  sfMuni: '', sfNeigh: '',
   sortK: 'p', sortDir: -1,
 };
 let RANGE = {min:0, max:1};
@@ -1685,6 +1695,14 @@ function choroClr(v) {
 }
 
 // ── STYLE ─────────────────────────────────────────────────────────────────
+// Returns true if a TAZ feature's properties pass all active filters
+function isVisibleTaz(p) {
+  if (!S.filter.has(p.sec || '')) return false;
+  if (S.sfMuni  && p.muni !== S.sfMuni)  return false;
+  if (S.sfNeigh && p.schn !== S.sfNeigh) return false;
+  return true;
+}
+
 function styleF(feature) {
   const p   = feature.properties;
   const sec = p.sec || '';
@@ -1693,20 +1711,14 @@ function styleF(feature) {
   const border = isTaz ? {color:'transparent', weight:0} : {color:'#888', weight:0.7};
   const hidden = {fillColor:'#e2e8f0', fillOpacity:.10, color:'transparent', weight:0};
 
-  // ── Spatial filter ────────────────────────────────────────────────────────
-  if (S.sf) {
-    if (isTaz) {
-      if (S.sf.type === 'muni'  && p.muni !== S.sf.nm) return hidden;
-      if (S.sf.type === 'neigh' && p.schn !== S.sf.nm) return hidden;
-    } else {
-      // dissolved level: hide non-matching areas when filter type matches level
-      if (S.sf.type === 'muni'  && S.lv === 'muni'  && nm !== S.sf.nm) return hidden;
-      if (S.sf.type === 'neigh' && S.lv === 'neigh'  && nm !== S.sf.nm) return hidden;
-    }
+  // ── Filters ───────────────────────────────────────────────────────────────
+  if (isTaz) {
+    if (!isVisibleTaz(p)) return hidden;
+  } else {
+    if (!S.filter.has(sec)) return hidden;
+    if (S.sfMuni  && S.lv === 'muni'  && nm !== S.sfMuni)  return hidden;
+    if (S.sfNeigh && S.lv === 'neigh' && nm !== S.sfNeigh) return hidden;
   }
-
-  // ── Sector filter (global) ─────────────────────────────────────────────────
-  if (!S.filter.has(sec)) return hidden;
 
   // ── Entity visibility ──────────────────────────────────────────────────────
   if (S.mode === 'entity' && hiddenEntities.has(nm)) return hidden;
@@ -1796,15 +1808,11 @@ function updateLegend() {
     return `<button class="sec-chip${on?'':' off'}" style="background:${v.color}" onclick="toggleSec('${k}')">${v.label}</button>`;
   }).join('');
 
-  // Spatial filter badge
-  const sfBadge = document.getElementById('sf-badge');
-  const sfLabel = document.getElementById('sf-label');
-  if (S.sf) {
-    sfLabel.textContent = S.sf.nm;
-    sfBadge.style.display = 'flex';
-  } else {
-    sfBadge.style.display = 'none';
-  }
+  // Sync dropdowns with state
+  const muniSel = document.getElementById('sf-muni');
+  if (muniSel) muniSel.value = S.sfMuni;
+  const neighSel = document.getElementById('sf-neigh');
+  if (neighSel) neighSel.value = S.sfNeigh;
 
   // Mode-specific controls
   metRow.style.display = S.mode==='choro' ? 'flex' : 'none';
@@ -1831,8 +1839,15 @@ function updateLegend() {
   updateMapLegend();
 }
 
-function clearSF() {
-  S.sf = null;
+function setSFMuni(v) {
+  S.sfMuni = v; S.sfNeigh = '';
+  const ns = document.getElementById('sf-neigh');
+  if (ns) ns.value = '';
+  applyFilters();
+}
+function setSFNeigh(v) { S.sfNeigh = v; applyFilters(); }
+function clearSF() { S.sfMuni=''; S.sfNeigh=''; applyFilters(); }
+function applyFilters() {
   updateLegend();
   if (geoLayer) geoLayer.setStyle(styleF);
   updateTable();
@@ -1858,33 +1873,35 @@ function buildRows() {
   const sc=S.sc, yr=S.yr, m=S.sortK;
   let all;
   if (S.lv==='taz') {
-    all = GJ.taz.features
-      .filter(f=>S.mode!=='sector'||S.filter.has(f.properties.sec))
-      .map(f=>{
-        const p=f.properties;
-        const d=p.d?.[sc]?.[yr]||{a:0,p:0,e:0};
-        return {nm:p.nm||'TAZ '+p.taz, sec:p.sec, a:d.a, p:d.p, e:d.e};
-      })
-      .sort((a,b)=>m==='nm'?a.nm.localeCompare(b.nm,'he'):S.sortDir*(a[m]-b[m]));
-    return {display: all.slice(0,80), total: all, noData: 0};
+    // Aggregate visible TAZ zones by sector
+    const acc = {};
+    Object.entries(SECTOR).forEach(([k,v])=>{ acc[k]={nm:v.label, sec:k, a:0, p:0, e:0}; });
+    GJ.taz.features.forEach(f=>{
+      const p=f.properties;
+      if (!isVisibleTaz(p)) return;
+      const d=p.d?.[sc]?.[yr]||{a:0,p:0,e:0};
+      if (acc[p.sec]) { acc[p.sec].a+=d.a; acc[p.sec].p+=d.p; acc[p.sec].e+=d.e; }
+    });
+    all = Object.values(acc).filter(r=>r.a>0||r.p>0||r.e>0)
+          .sort((a,b)=>m==='nm'?a.nm.localeCompare(b.nm,'he'):S.sortDir*(a[m]-b[m]));
+    return {display: all, total: all, noData: 0, isSector: true};
   }
-  const raw = Object.entries(AGG[S.lv]||{})
+  let raw = Object.entries(AGG[S.lv]||{})
     .map(([nm,scD])=>{
       const d=scD?.[sc]?.[yr]||{a:0,p:0,e:0};
       return {nm, sec:'', a:d.a, p:d.p, e:d.e};
-    })
-    .filter(r=>S.mode!=='entity'||!hiddenEntities.has(r.nm));
+    });
+  // Apply spatial filters at dissolved levels
+  if (S.sfMuni  && S.lv==='muni')  raw = raw.filter(r=>r.nm===S.sfMuni);
+  if (S.sfNeigh && S.lv==='neigh') raw = raw.filter(r=>r.nm===S.sfNeigh);
+  if (S.mode==='entity') raw = raw.filter(r=>!hiddenEntities.has(r.nm));
   const withData = raw.filter(r=>r.a>0||r.p>0||r.e>0);
   const noData = raw.length - withData.length;
   all = withData.sort((a,b)=>m==='nm'?a.nm.localeCompare(b.nm,'he'):S.sortDir*(a[m]-b[m]));
-  return {display: all, total: all, noData};
+  return {display: all, total: all, noData, isSector: false};
 }
 
 function updateTable() {
-  const isTaz = S.lv === 'taz';
-  document.getElementById('taz-hint').style.display = isTaz ? 'flex' : 'none';
-  document.getElementById('sum-wrap').style.display = isTaz ? 'none' : '';
-  if (isTaz) { document.getElementById('tbl-cap').textContent = ''; return; }
   const {display: rows, total: allRows, noData} = buildRows();
   const tot = allRows.reduce((acc,r)=>({a:acc.a+r.a,p:acc.p+r.p,e:acc.e+r.e}),{a:0,p:0,e:0});
   const lvLbl = {taz:'אזורי תנועה',neigh:'שכונות',muni:'רשויות מקומיות',dist:'מחוזות'};
@@ -2041,13 +2058,9 @@ function selectSearch(idx, e) {
   if (!item) return;
   document.getElementById('search-inp').value = item.nm;
   document.getElementById('search-drop').style.display = 'none';
-  // Set spatial filter for muni / neigh selections
-  if (item.type === 'muni' || item.type === 'neigh') {
-    S.sf = {type: item.type, nm: item.nm};
-    updateLegend();
-    if (geoLayer) geoLayer.setStyle(styleF);
-    updateTable();
-  }
+  // Set spatial filter from search result
+  if (item.type === 'muni') { S.sfMuni = item.nm; S.sfNeigh = ''; applyFilters(); }
+  else if (item.type === 'neigh') { S.sfNeigh = item.nm; applyFilters(); }
   if (S.lv !== item.type) setLevel(item.type);
   zoomToName(item.nm);
 }
@@ -2067,6 +2080,18 @@ function hideSearchDrop() {
     b.onclick=()=>setYear(y);
     track.appendChild(b);
   });
+  // Populate municipality dropdown
+  const muniSel = document.getElementById('sf-muni');
+  if (muniSel) {
+    const names = GJ.muni.features.map(f=>f.properties.nm).filter(Boolean).sort((a,b)=>a.localeCompare(b,'he'));
+    names.forEach(nm=>{ const o=document.createElement('option'); o.value=nm; o.textContent=nm; muniSel.appendChild(o); });
+  }
+  // Populate neighborhood dropdown
+  const neighSel = document.getElementById('sf-neigh');
+  if (neighSel) {
+    const names = GJ.neigh.features.map(f=>f.properties.nm).filter(Boolean).sort((a,b)=>a.localeCompare(b,'he'));
+    names.forEach(nm=>{ const o=document.createElement('option'); o.value=nm; o.textContent=nm; neighSel.appendChild(o); });
+  }
   updateMap();
 })();
 </script>
