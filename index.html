@@ -1482,7 +1482,8 @@ button{font-family:inherit;cursor:pointer}
       <div class="p-card-hdr"><span class="p-card-title">הצגה על המפה</span></div>
       <div class="p-card-body" style="display:flex;flex-direction:column;gap:8px">
         <div class="seg-row">
-          <button class="seg-btn active" id="md-sector" onclick="setMode('sector')">מגזר</button>
+          <button class="seg-btn active" id="md-base"   onclick="setMode('base')">ניטרלי</button>
+          <button class="seg-btn"        id="md-sector" onclick="setMode('sector')">מגזר</button>
           <button class="seg-btn"        id="md-entity" onclick="setMode('entity')" style="display:none">ישות</button>
           <button class="seg-btn"        id="md-choro"  onclick="setMode('choro')">כמותי</button>
         </div>
@@ -1611,7 +1612,7 @@ function toggleAllEntities() {
 
 // ── STATE ─────────────────────────────────────────────────────────────────
 const S = {
-  sc: 'jtmt', yr: 2025, lv: 'taz', mode: 'sector', met: 'p',
+  sc: 'jtmt', yr: 2025, lv: 'taz', mode: 'base', met: 'p',
   filter: new Set(Object.keys(SECTOR)),
   sortK: 'p', sortDir: -1,
 };
@@ -1651,14 +1652,16 @@ function choroClr(v) {
 function styleF(feature) {
   const sec = feature.properties.sec;
   const nm  = feature.properties.nm || '';
-  if (S.mode === 'sector' && !S.filter.has(sec)) return {fillColor:'#d1d5db', fillOpacity:.15, color:'transparent', weight:0};
-  if (S.mode === 'entity' && hiddenEntities.has(nm))  return {fillColor:'#d1d5db', fillOpacity:.15, color:'transparent', weight:0};
+  const isTaz = S.lv === 'taz';
+  const border = isTaz ? {color:'transparent', weight:0} : {color:'#888', weight:0.7};
+  if (S.mode === 'base') return {fillColor:'#94a3b8', fillOpacity:.18, ...border, opacity:.7};
+  if (S.mode === 'sector' && !S.filter.has(sec)) return {fillColor:'#d1d5db', fillOpacity:.12, color:'transparent', weight:0};
+  if (S.mode === 'entity' && hiddenEntities.has(nm))  return {fillColor:'#d1d5db', fillOpacity:.12, color:'transparent', weight:0};
   let fill;
   if (S.mode === 'sector') fill = secClr(sec);
   else if (S.mode === 'entity') fill = entityColors[nm] || DEFAULT_CLR;
   else fill = choroClr(getVal(feature.properties));
-  const isTaz = S.lv === 'taz';
-  return {fillColor:fill, fillOpacity:.84, color: isTaz ? 'transparent' : '#888', weight: isTaz ? 0 : 0.7, opacity:.8};
+  return {fillColor:fill, fillOpacity:.84, ...border, opacity:.8};
 }
 
 // ── MAP UPDATE ────────────────────────────────────────────────────────────
@@ -1700,6 +1703,7 @@ function updateMap() {
 function updateMapLegend() {
   const el = document.getElementById('map-legend');
   if (!el) return;
+  if (S.mode === 'base') { el.style.display = 'none'; return; }
   if (S.mode === 'sector') {
     el.style.display = 'block';
     el.innerHTML = '<div class="leg-title">מגזר</div>' +
@@ -1735,6 +1739,7 @@ function updateLegend() {
   choLeg.style.display  = S.mode==='choro' ? 'block' : 'none';
   secWrap.style.display = S.mode==='sector' ? 'block' : 'none';
   entLeg.style.display  = S.mode==='entity' ? 'block' : 'none';
+  if (S.mode==='base') { updateMapLegend(); return; }
 
   if (S.mode==='sector') {
     const allOn = Object.keys(SECTOR).every(k=>S.filter.has(k));
@@ -1911,7 +1916,7 @@ function setLevel(lv) {
   const entBtn = document.getElementById('md-entity');
   if (lv==='taz') {
     entBtn.style.display='none';
-    if (S.mode==='entity') { S.mode='sector'; ['sector','entity','choro'].forEach(m=>{const e=document.getElementById('md-'+m);if(e)e.classList.toggle('active',m==='sector');}); }
+    if (S.mode==='entity') { S.mode='base'; ['base','sector','entity','choro'].forEach(m=>{const e=document.getElementById('md-'+m);if(e)e.classList.toggle('active',m==='base');}); }
   } else {
     entBtn.style.display='';
   }
@@ -1921,7 +1926,7 @@ function setLevel(lv) {
 
 function setMode(md) {
   S.mode=md;
-  ['sector','entity','choro'].forEach(m=>{
+  ['base','sector','entity','choro'].forEach(m=>{
     const el=document.getElementById('md-'+m);
     if(el) el.classList.toggle('active',m===md);
   });
