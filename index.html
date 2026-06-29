@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="he" dir="rtl">
+<html lang="he" dir="rtl" xmlns:mso="urn:schemas-microsoft-com:office:office" xmlns:msdt="uuid:C2F41010-65B3-11d1-A29F-00AA00C14882">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
@@ -1438,6 +1438,14 @@ button{font-family:inherit;cursor:pointer}
 .srch-nm{flex:1;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .srch-tag{font-size:10px;color:#64748b;background:#f1f5f9;padding:2px 7px;border-radius:10px;white-space:nowrap;flex-shrink:0}
 </style>
+
+<!--[if gte mso 9]><xml>
+<mso:CustomDocumentProperties>
+<mso:_dlc_DocId msdt:dt="string">PLAM-1214481970-1660</mso:_dlc_DocId>
+<mso:_dlc_DocIdItemGuid msdt:dt="string">fd8f2c57-33a4-4ade-9117-081d784dfc55</mso:_dlc_DocIdItemGuid>
+<mso:_dlc_DocIdUrl msdt:dt="string">https://jtmt.sharepoint.com/sites/ModelsDepartment/InformationDivision/_layouts/15/DocIdRedir.aspx?ID=PLAM-1214481970-1660, PLAM-1214481970-1660</mso:_dlc_DocIdUrl>
+</mso:CustomDocumentProperties>
+</xml><![endif]-->
 </head>
 <body>
 
@@ -1451,6 +1459,16 @@ button{font-family:inherit;cursor:pointer}
     <div class="header-title">ממשק תחזיות דמוגרפיות</div>
     <div class="header-sub">תחבורה לירושלים — מטרופולין ירושלים 2020–2050</div>
   </div>
+  <div style="margin-right:auto"></div>
+  <span style="font-size:11px;opacity:.75;white-space:nowrap">נתונים גרסא 0.9</span>
+  <a href="forecast-documentation.pdf" target="_blank"
+     style="display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,0.15);
+            color:white;text-decoration:none;font-size:12px;padding:4px 10px;border-radius:6px;
+            border:1px solid rgba(255,255,255,0.3);white-space:nowrap;transition:background .2s"
+     onmouseover="this.style.background='rgba(255,255,255,0.25)'"
+     onmouseout="this.style.background='rgba(255,255,255,0.15)'">
+    &#128196; דוח תיעוד
+  </a>
 </header>
 
 <div class="app-body">
@@ -1799,6 +1817,16 @@ function updateMapLegend() {
       '<div class="choro-bar" style="height:12px;margin:4px 0"></div>' +
       '<div style="display:flex;justify-content:space-between;font-size:10px;color:#64748b">' +
       '<span>' + fmt(max) + '</span><span>' + fmt(min) + '</span></div>';
+  } else if (S.mode === 'entity' && S.lv !== 'taz') {
+    const entries = Object.entries(entityColors).filter(([nm])=>!hiddenEntities.has(nm));
+    el.style.display = 'block';
+    el.style.maxHeight = '220px';
+    el.style.overflowY = 'auto';
+    el.innerHTML = '<div class="leg-title">ישות</div>' +
+      entries.map(([nm,clr]) =>
+        '<div class="leg-row"><span class="leg-sw" style="background:' + clr + '"></span>' +
+        '<span style="font-size:11px">' + esc(nm) + '</span></div>'
+      ).join('');
   } else {
     el.style.display = 'none';
   }
