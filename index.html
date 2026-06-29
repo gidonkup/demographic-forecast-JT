@@ -1419,6 +1419,19 @@ button{font-family:inherit;cursor:pointer}
 .dp-yr.dp-active{background:#1B3CC0;color:white;font-weight:700;border-color:#1B3CC0}
 .dp-yr-val{font-size:10px;color:#94a3b8}
 .dp-yr.dp-active .dp-yr-val{color:rgba(255,255,255,.8)}
+/* Search */
+#search-wrap{position:relative;padding:10px 12px 6px;border-bottom:1px solid #e2e8f0}
+#search-box{display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid #cbd5e1;border-radius:8px;padding:0 10px;transition:border-color .15s}
+#search-box:focus-within{border-color:#1B3CC0;box-shadow:0 0 0 2px rgba(27,60,192,.12);background:#fff}
+#search-icon{color:#94a3b8;font-size:14px;flex-shrink:0}
+#search-inp{flex:1;border:none;background:transparent;padding:8px 4px;font-size:13px;direction:rtl;font-family:inherit;outline:none;color:#0f172a}
+#search-inp::placeholder{color:#94a3b8}
+#search-drop{position:absolute;top:calc(100% - 4px);right:12px;left:12px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.13);z-index:2000;max-height:270px;overflow-y:auto;display:none}
+.srch-item{padding:8px 12px;cursor:pointer;direction:rtl;display:flex;align-items:center;gap:8px;border-bottom:1px solid #f8fafc}
+.srch-item:last-child{border-bottom:none}
+.srch-item:hover{background:#eff6ff}
+.srch-nm{flex:1;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srch-tag{font-size:10px;color:#64748b;background:#f1f5f9;padding:2px 7px;border-radius:10px;white-space:nowrap;flex-shrink:0}
 </style>
 </head>
 <body>
@@ -1443,6 +1456,18 @@ button{font-family:inherit;cursor:pointer}
   </div>
 
   <div class="side-panel">
+
+    <!-- חיפוש -->
+    <div id="search-wrap">
+      <div id="search-box">
+        <span id="search-icon">&#128269;</span>
+        <input id="search-inp" type="text" placeholder="חיפוש יישוב / שכונה / אזור תנועה..."
+               oninput="doSearch(this.value)"
+               onblur="setTimeout(hideSearchDrop,200)"
+               autocomplete="off">
+      </div>
+      <div id="search-drop"></div>
+    </div>
 
     <!-- תרחיש -->
     <div class="p-card">
@@ -1942,6 +1967,45 @@ function setMetric(mt) {
 // ── UTILS ─────────────────────────────────────────────────────────────────
 function fmt(n) { return n ? Math.round(n).toLocaleString('he-IL') : '0'; }
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ── SEARCH ────────────────────────────────────────────────────────────────
+const SEARCH_IDX = [];
+(function buildIdx(){
+  GJ.muni.features.forEach(f=>{ if(f.properties.nm) SEARCH_IDX.push({nm:f.properties.nm, type:'muni',  tag:'יישוב'}); });
+  GJ.neigh.features.forEach(f=>{ if(f.properties.nm) SEARCH_IDX.push({nm:f.properties.nm, type:'neigh', tag:'שכונה'}); });
+  GJ.taz.features.forEach(f=>{ if(f.properties.nm) SEARCH_IDX.push({nm:f.properties.nm,  type:'taz',   tag:'אזור תנועה'}); });
+})();
+
+let _srchResults = [];
+
+function doSearch(q) {
+  const drop = document.getElementById('search-drop');
+  if (!q.trim()) { drop.style.display='none'; return; }
+  const lq = q.trim();
+  _srchResults = SEARCH_IDX.filter(r => r.nm.includes(lq)).slice(0, 14);
+  if (!_srchResults.length) { drop.style.display='none'; return; }
+  drop.innerHTML = _srchResults.map((r,i) =>
+    '<div class="srch-item" onmousedown="selectSearch('+i+',event)">' +
+    '<span class="srch-nm">' + esc(r.nm) + '</span>' +
+    '<span class="srch-tag">' + r.tag + '</span></div>'
+  ).join('');
+  drop.style.display = 'block';
+}
+
+function selectSearch(idx, e) {
+  if (e) e.preventDefault();
+  const item = _srchResults[idx];
+  if (!item) return;
+  document.getElementById('search-inp').value = item.nm;
+  document.getElementById('search-drop').style.display = 'none';
+  if (S.lv !== item.type) setLevel(item.type);
+  zoomToName(item.nm);
+}
+
+function hideSearchDrop() {
+  const el = document.getElementById('search-drop');
+  if (el) el.style.display = 'none';
+}
 
 // ── INIT ──────────────────────────────────────────────────────────────────
 (function init(){
